@@ -1,0 +1,222 @@
+Aqui está a versão do script reescrito em PowerShell com a mesma funcionalidade do script CMD fornecido, mas otimizado para PowerShell, incluindo verificações robustas, tratamento de erros e proteção contra loops infinitos. O objetivo é resetar as configurações do AnyDesk para tentar contornar a limitação de tempo, preservando o arquivo user.conf e a pasta thumbnails.
+
+powershell
+
+Recolher
+
+Encapsular
+
+Copiar
+# Script para resetar configurações do AnyDesk
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+$Host.UI.RawUI.WindowTitle = "Resetar AnyDesk"
+
+# Função para verificar privilégios administrativos
+function Test-Admin {
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Host "Por favor, execute este script como administrador."
+        Read-Host "Pressione Enter para sair"
+        exit
+    }
+}
+
+# Função para parar o AnyDesk
+function Stop-AnyDesk {
+    $maxAttempts = 5
+    $attempt = 0
+    while ($attempt -lt $maxAttempts) {
+        try {
+            $service = Get-Service -Name "AnyDesk" -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq "Running") {
+                Stop-Service -Name "AnyDesk" -Force
+                Start-Sleep -Seconds 1
+            }
+            $process = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
+            if ($process) {
+                Stop-Process -Name "AnyDesk" -Force
+            }
+            return
+        }
+        catch {
+            $attempt++
+            Start-Sleep -Seconds 1
+        }
+    }
+    Write-Host "Aviso: Não foi possível parar o serviço AnyDesk após $maxAttempts tentativas."
+}
+
+# Função para iniciar o AnyDesk
+function Start-AnyDesk {
+    $maxAttempts = 5
+    $attempt = 0
+    while ($attempt -lt $maxAttempts) {
+        try {
+            $service = Get-Service -Name "AnyDesk" -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -ne "Running") {
+                Start-Service -Name "AnyDesk"
+                Start-Sleep -Seconds 1
+            }
+            $exePaths = @(
+                "${env:SystemDrive}\Program Files (x86)\AnyDesk\AnyDesk.exe",
+                "${env:SystemDrive}\Program Files\AnyDesk\AnyDesk.exe"
+            )
+            foreach ($path in $exePaths) {
+                if (Test-Path $path) {
+                    Start-Process -FilePath $path
+                    return
+                }
+            }
+            Write-Host "Aviso: Executável do AnyDesk não encontrado."
+            return
+        }
+        catch {
+            $attempt++
+            Start-Sleep -Seconds 1
+        }
+    }
+    Write-Host "Aviso: Não foi possível iniciar o AnyDesk após $maxAttempts tentativas."
+}
+
+# Verifica privilégios administrativos
+Test-Admin
+
+# Define caminhos
+$allUsersPath = "$env:ProgramData\AnyDesk"
+$appDataPath = "$env:APPDATA\AnyDesk"
+$tempPath = "$env:TEMP"
+
+# Para o AnyDesk
+Stop-AnyDesk
+
+# Salva user.conf e thumbnails
+if (Test-Path "$appDataPath\user.conf") {
+    Copy-Item -Path "$appDataPath\user.conf" -Destination "$tempPath\user.conf" -Force
+}
+if (Test-Path "$appDataPath\thumbnails") {
+    Remove-Item -Path "$tempPath\thumbnails" -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -Path "$appDataPath\thumbnails" -Destination "$tempPath\thumbnails" -Recurse -Force
+}
+
+# Remove arquivos de configuração
+Remove-Item -Path "$allUsersPath\*" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$appDataPath\*" -Force -ErrorAction SilentlyContinue
+
+# Limpa chaves do Registro
+$regPaths = @(
+    "HKCU:\Software\AnyDesk",
+    "HKLM:\Software\AnyDesk"
+)
+foreach ($path in $regPaths) {
+    if (Test-Path $path) {
+        Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Inicia o AnyDesk
+Start-AnyDesk
+
+# Aguarda a recriação do system.conf
+$maxWaitSeconds = 30
+$elapsed = 0
+while ($elapsed -lt $maxWaitSeconds) {
+    if (Test-Path "$allUsersPath\system.conf") {
+        $content = Get-Content -Path "$allUsersPath\system.conf" -ErrorAction SilentlyContinue
+        if ($content -match "ad.anynet.id=") {
+            break
+        }
+    }
+    Start-Sleep -Seconds 1
+    $elapsed++
+}
+if ($elapsed -ge $maxWaitSeconds) {
+    Write-Host "Timeout: system.conf não foi criado ou não contém 'ad.anynet.id='."
+    Read-Host "Pressione Enter para sair"
+    exit
+}
+
+# Restaura configurações
+Stop-AnyDesk
+if (Test-Path "$tempPath\user.conf") {
+    Move-Item -Path "$tempPath\user.conf" -Destination "$appDataPath\user.conf" -Force
+}
+if (Test-Path "$tempPath\thumbnails") {
+    Copy-Item -Path "$tempPath\thumbnails" -Destination "$appDataPath\thumbnails" -Recurse -Force
+    Remove-Item -Path "$tempPath\thumbnails" -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# Inicia o AnyDesk novamente
+Start-AnyDesk
+
+Write-Host "*********"
+Write-Host "Concluído."
+Read-Host "Pressione Enter para sair"
+Explicação do Script em PowerShell
+Configuração inicial:
+Define $ErrorActionPreference = "Stop" para interromper a execução em erros e Set-StrictMode -Version Latest para maior rigor na sintaxe.
+Define o título da janela como "Resetar AnyDesk".
+Verificação de privilégios:
+A função Test-Admin verifica se o script está sendo executado como administrador usando WindowsPrincipal. Sai se não tiver privilégios.
+Funções Stop-AnyDesk e Start-AnyDesk:
+Stop-AnyDesk: Para o serviço AnyDesk (Stop-Service) e o processo (Stop-Process), com até 5 tentativas e pausas de 1 segundo para evitar loops infinitos.
+Start-AnyDesk: Inicia o serviço (Start-Service) e o executável do AnyDesk, verificando dois caminhos possíveis. Também limitado a 5 tentativas.
+Manipulação de arquivos:
+Salva user.conf e a pasta thumbnails em $env:TEMP antes de excluir arquivos.
+Remove todos os arquivos em $env:ProgramData\AnyDesk e $env:APPDATA\AnyDesk.
+Limpa chaves do Registro em HKCU:\Software\AnyDesk e HKLM:\Software\AnyDesk.
+Aguardar system.conf:
+Aguarda até 30 segundos para que o arquivo system.conf seja criado e contenha ad.anynet.id=. Sai com erro se o tempo limite for atingido.
+Restauração:
+Restaura user.conf e thumbnails para suas localizações originais.
+Remove a pasta temporária thumbnails.
+Mensagem final:
+Exibe "Concluído" e aguarda o usuário pressionar Enter para sair.
+Como usar
+Salve o script como reset_anydesk.ps1.
+Abra o PowerShell como administrador:
+Pressione Win + S, digite PowerShell, clique com o botão direito e selecione "Executar como administrador".
+Navegue até o diretório do script:
+powershell
+
+Recolher
+
+Encapsular
+
+Copiar
+cd "C:\caminho\para\o\script"
+Execute o script:
+powershell
+
+Recolher
+
+Encapsular
+
+Copiar
+.\reset_anydesk.ps1
+Se receber um erro de execução de scripts, libere a execução com:
+powershell
+
+Recolher
+
+Encapsular
+
+Copiar
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+Por que o problema pode persistir?
+Conforme mencionado anteriormente, a limitação de tempo do AnyDesk é frequentemente imposta pelo servidor, não apenas por arquivos locais. O script limpa configurações locais e o Registro, mas:
+
+O servidor do AnyDesk pode detectar o ID ou o endereço de rede (IP) como associado a uso comercial ou sessões prolongadas.
+Informações residuais podem permanecer em locais não cobertos (ex.: cache na nuvem).
+Se o uso for interpretado como comercial, a limitação será reaplicada.
+Outras sugestões
+Modo portátil: Use a versão portátil do AnyDesk (disponível em anydesk.com) para evitar configurações persistentes.
+Mudar a rede: Conecte-se a uma rede diferente (ex.: hotspot do celular) para gerar um novo ID.
+Suporte oficial: Contate support.anydesk.com, fornecendo o ID do AnyDesk e explicando que o uso é pessoal, se aplicável.
+Licença paga: Considere uma licença paga para uso contínuo sem restrições (verifique preços em anydesk.com).
+Se o script não resolver ou você precisar de ajuda para executá-lo, por favor, informe:
+
+A mensagem exata exibida pelo AnyDesk.
+Se o script gerou algum erro ao rodar.
+O contexto de uso (pessoal ou profissional).
