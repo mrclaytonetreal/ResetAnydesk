@@ -138,3 +138,6 @@ A mensagem exata exibida pelo AnyDesk (ex.: "Sessão limitada a 30 segundos").
 Se você está usando para fins pessoais ou profissionais.
 Se já tentou reinstalar ou usar outra rede.
 Alternativa: Considere ferramentas semelhantes, como TeamViewer (versão gratuita para uso pessoal) ou RemotePC, caso o AnyDesk continue limitando.
+
+Gostou faça uma doaçao e ajude um dev a continuar seu trabalho
+![image](https://github.com/user-attachments/assets/11c3956b-7fb8-457f-ad38-fa737a3c9d53)
