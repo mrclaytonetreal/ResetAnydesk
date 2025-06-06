@@ -109,6 +109,7 @@ goto stop_loop
 taskkill /f /im "AnyDesk.exe" >NUL 2>&1
 :stop_end
 exit /b
+
 Mudanças realizadas:
 Página de código: Alterada para 1252 (mais comum em sistemas em português).
 Loops com timeout: Adicionados contadores nos loops :start_any, :stop_any e :lic para evitar loops infinitos (máximo de 5 tentativas para serviços e 30 segundos para system.conf).
